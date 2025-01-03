@@ -1,0 +1,43 @@
+name: Update ALVR Nightly
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Run daily at midnight
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  check-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Get latest ALVR nightly release
+        id: get_latest_release
+        run: |
+          LATEST_TAG=$(curl -s https://api.github.com/repos/alvr-org/ALVR-nightly/releases/latest | jq -r .tag_name)
+          echo "Latest tag: $LATEST_TAG"
+          echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
+
+      - name: Check for updates
+        run: |
+          if [[ "$LATEST_TAG" == "$(cat latest_version.txt)" ]]; then
+            echo "No new version found. Exiting."
+            exit 0
+          fi
+          echo "New version found: $LATEST_TAG"
+
+      - name: Update spec file
+        run: |
+          sed -i "s/^Version: .*/Version: ${LATEST_TAG#v}/" package.spec
+          echo "$LATEST_TAG" > latest_version.txt
+
+      - name: Commit and push changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add package.spec latest_version.txt
+          git commit -m "Update to $LATEST_TAG"
+          git push
